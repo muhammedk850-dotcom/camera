@@ -3,353 +3,138 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ömürlük Kamera Köprüsü</title>
+    <title>Kamera Köprüsü</title>
     <style>
-        body { font-family: -apple-system, sans-serif; text-align: center; background: #000; color: #fff; padding: 20px; }
-        #video { width: 100%; max-width: 400px; border-radius: 10px; background: #222; }
-        .status { margin: 10px auto; padding: 10px; border-radius: 5px; background: #333; font-size: 14px; max-width: 400px; }
-        .ready    { color: #4CAF50; }
-        .shooting { color: #E91E63; animation: blink 1s infinite; }
-        .gif      { color: #FF9800; animation: blink 1s infinite; }
-        @keyframes blink { 50% { opacity: 0.5; } }
-        #progressWrap { width: 100%; max-width: 400px; margin: 8px auto; display: none; }
-        progress { width: 100%; height: 10px; border-radius: 5px; }
-        #info  { font-size: 13px; color: #aaa; margin: 6px 0; }
-        #timer { font-size: 13px; color: #FF9800; margin: 4px 0; }
-        #testBtn { margin-top: 12px; padding: 8px 20px; background: #333; color: #FF9800; border: 1px solid #FF9800; border-radius: 6px; font-size: 13px; cursor: pointer; }
-        .commands { font-size: 11px; color: #555; margin-top: 8px; }
+        body {
+            font-family: -apple-system, sans-serif;
+            text-align: center;
+            background: #000;
+            color: #fff;
+            padding: 20px;
+            margin: 0;
+        }
+        video {
+            width: 100%;
+            max-width: 400px;
+            border-radius: 10px;
+            background: #111;
+            display: block;
+            margin: 12px auto;
+        }
+        #durum {
+            margin: 10px auto;
+            padding: 10px 16px;
+            border-radius: 8px;
+            background: #1a1a1a;
+            max-width: 400px;
+            font-size: 14px;
+        }
+        #bilgi {
+            font-size: 13px;
+            color: #aaa;
+            min-height: 20px;
+            margin: 6px 0;
+        }
     </style>
 </head>
 <body>
-    <h2>📷 Ömürlük Kamera Köprüsü</h2>
+
+    <h2>📷 Kamera Köprüsü</h2>
     <video id="video" autoplay playsinline muted></video>
-    <canvas id="canvas" style="display:none;"></canvas>
+    <canvas id="canvas" style="display:none"></canvas>
 
-    <div id="status" class="status">Kamera başlatılıyor...</div>
-    <p id="info"></p>
-    <p id="timer"></p>
-
-    <div id="progressWrap">
-        <p style="font-size:13px;color:#FF9800;" id="progressLabel">GIF oluşturuluyor...</p>
-        <progress id="progressBar" value="0" max="100"></progress>
-    </div>
-
-    <button id="testBtn" onclick="runTest()">🧪 Test: Hemen GIF Yap (5 kare)</button>
-
-    <p style="font-size:12px;color:#888;margin-top:12px;">Otomatik: her 5 dakika 1 kare → 72 kare → GIF</p>
-    <div class="commands">Manuel: herhangi mesaj = 📸 anlık &nbsp;|&nbsp; SERİ = 12 fotoğraf</div>
+    <div id="durum">Başlatılıyor...</div>
+    <p id="bilgi"></p>
 
     <script>
-        const BOT_TOKEN  = '8344840077:AAFnbmORjl8rq5t94MQN76W-kZYQydd8-Z4';
-        const CHAT_ID    = '949655728';
+        // ─── AYARLAR ───────────────────────────────────────
+        const TOKEN   = '8344840077:AAFnbmORjl8rq5t94MQN76W-kZYQydd8-Z4';
+        const CHAT_ID = '949655728';
+        // ──────────────────────────────────────────────────
 
-        const FRAME_COUNT    = 72;
-        const FRAME_INTERVAL = 5 * 60 * 1000;
-        const GIF_DELAY      = 300;
-        const GIF_W          = 320;
-        const GIF_H          = 240;
+        const video   = document.getElementById('video');
+        const canvas  = document.getElementById('canvas');
+        const durum   = document.getElementById('durum');
+        const bilgi   = document.getElementById('bilgi');
 
-        let lastUpdateId = 0;
-        let manualBusy   = false;
-        let tlFrames     = [];
-        let tlTimer      = null;
-        let tlNextIn     = 0;
-        let tlCountdown  = null;
-        let gifReady     = false;
+        let lastId = 0;
+        let mesgul = false;
 
-        const video        = document.getElementById('video');
-        const canvas       = document.getElementById('canvas');
-        const statusDiv    = document.getElementById('status');
-        const infoDiv      = document.getElementById('info');
-        const timerDiv     = document.getElementById('timer');
-        const progressWrap = document.getElementById('progressWrap');
-        const progressBar  = document.getElementById('progressBar');
-        const progressLabel= document.getElementById('progressLabel');
-
-        // gif.js inline worker — CDN'e bağımlılık yok
-        function getWorkerScript() {
-            // gif.js worker kodunu inline blob olarak yükle
-            return URL.createObjectURL(new Blob([`
-                var exports={};
-                /* gif.js worker - minimal inline version */
-                self.onmessage=function(e){
-                    var data=e.data;
-                    if(data.frames){
-                        // Mesajı işle
-                        self.postMessage({progress:1});
-                    }
-                };
-            `], {type:'application/javascript'}));
-        }
-
-        // gif.js'i CDN'den yükle
-        function loadGifJs() {
-            return new Promise((resolve, reject) => {
-                if (window.GIF) { resolve(); return; }
-                const s = document.createElement('script');
-                s.src = 'https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.js';
-                s.onload  = () => { gifReady = true; resolve(); };
-                s.onerror = () => reject(new Error('gif.js yüklenemedi'));
-                document.head.appendChild(s);
-            });
-        }
-
-        async function sendTelegram(msg) {
-            try {
-                await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
-                    method: 'POST',
-                    headers: {'Content-Type':'application/json'},
-                    body: JSON.stringify({ chat_id: CHAT_ID, text: msg })
-                });
-            } catch(e) {}
-        }
-
-        async function initCamera() {
-            try {
-                // gif.js yükle
-                await loadGifJs();
-
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: 'environment' }
-                });
+        // ─── Kamera Başlat ────────────────────────────────
+        navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+            .then(stream => {
                 video.srcObject = stream;
-                await new Promise(r => video.onloadedmetadata = r);
+                durum.style.color = '#4CAF50';
+                durum.innerText = '✅ Hazır — Bot dinleniyor';
+                polling();
+            })
+            .catch(err => {
+                durum.style.color = '#f44336';
+                durum.innerText = '❌ Kamera hatası: ' + err.message;
+            });
 
-                statusDiv.innerText = '✅ Sistem Hazır';
-                statusDiv.className = 'status ready';
-                await sendTelegram('🟢 Kamera sistemi başlatıldı. 6 saatlik timelapse döngüsü başlıyor...');
-                startTimelapse();
-                startPolling();
-            } catch (err) {
-                statusDiv.innerText = '❌ Hata: ' + err.message;
-                await sendTelegram('❌ Başlatma hatası: ' + err.message);
-            }
-        }
-
-        function captureImageData() {
-            canvas.width  = GIF_W;
-            canvas.height = GIF_H;
-            canvas.getContext('2d').drawImage(video, 0, 0, GIF_W, GIF_H);
-            return canvas.getContext('2d').getImageData(0, 0, GIF_W, GIF_H);
-        }
-
-        async function sendPhoto(caption = '') {
-            canvas.width  = video.videoWidth || GIF_W;
-            canvas.height = video.videoHeight || GIF_H;
+        // ─── Fotoğraf Çek & Gönder ────────────────────────
+        function fotoCek() {
+            canvas.width  = video.videoWidth;
+            canvas.height = video.videoHeight;
             canvas.getContext('2d').drawImage(video, 0, 0);
+        }
+
+        async function fotoGonder(aciklama = '') {
+            fotoCek();
             return new Promise(resolve => {
                 canvas.toBlob(async blob => {
                     const fd = new FormData();
                     fd.append('chat_id', CHAT_ID);
-                    fd.append('photo', blob, 'kamera.jpg');
-                    if (caption) fd.append('caption', caption);
+                    fd.append('photo', blob, 'foto.jpg');
+                    if (aciklama) fd.append('caption', aciklama);
                     try {
-                        await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`,
+                        await fetch(`https://api.telegram.org/bot${TOKEN}/sendPhoto`,
                             { method: 'POST', body: fd });
                         resolve(true);
-                    } catch { resolve(false); }
-                }, 'image/jpeg', 0.75);
+                    } catch {
+                        resolve(false);
+                    }
+                }, 'image/jpeg', 0.8);
             });
         }
 
-        function msToHMS(ms) {
-            const s   = Math.max(0, Math.floor(ms / 1000));
-            const h   = Math.floor(s / 3600);
-            const m   = Math.floor((s % 3600) / 60);
-            const sec = s % 60;
-            return `${h > 0 ? h + 's ' : ''}${m}dk ${sec}sn`;
-        }
-
-        function updateUI() {
-            const n = tlFrames.length;
-            infoDiv.innerText = `🎞 Biriken kare: ${n} / ${FRAME_COUNT}  (${n * 5} dk geçti)`;
-            const totalMs = (FRAME_COUNT - n) * FRAME_INTERVAL + tlNextIn;
-            timerDiv.innerText = `⏳ Sonraki kare: ${msToHMS(tlNextIn)}  |  GIF'e kalan: ${msToHMS(totalMs)}`;
-        }
-
-        function startTimelapse() {
-            tlFrames = [];
-            tlNextIn = FRAME_INTERVAL;
-            if (tlTimer)     clearTimeout(tlTimer);
-            if (tlCountdown) clearInterval(tlCountdown);
-            scheduleNextFrame();
-            tlCountdown = setInterval(() => {
-                tlNextIn = Math.max(0, tlNextIn - 1000);
-                updateUI();
-            }, 1000);
-            updateUI();
-        }
-
-        function scheduleNextFrame() {
-            tlNextIn = FRAME_INTERVAL;
-            tlTimer  = setTimeout(captureTimelapseFrame, FRAME_INTERVAL);
-        }
-
-        async function captureTimelapseFrame() {
-            try {
-                tlFrames.push(captureImageData());
-                updateUI();
-
-                if (tlFrames.length >= FRAME_COUNT) {
-                    clearInterval(tlCountdown);
-                    timerDiv.innerText = '';
-                    await buildAndSendGif(tlFrames.slice(), '6 Saatlik Timelapse', FRAME_COUNT);
-                    startTimelapse();
-                } else {
-                    scheduleNextFrame();
-                }
-            } catch(e) {
-                await sendTelegram('⚠️ Kare çekim hatası: ' + e.message);
-                scheduleNextFrame();
-            }
-        }
-
-        async function buildAndSendGif(frames, title, totalFrames) {
-            statusDiv.innerText = '🎨 GIF oluşturuluyor...';
-            statusDiv.className = 'status gif';
-            progressWrap.style.display = 'block';
-            progressBar.value = 0;
-            infoDiv.innerText  = '';
-            timerDiv.innerText = '';
-
-            try {
-                if (!window.GIF) await loadGifJs();
-
-                const gifBlob = await new Promise((resolve, reject) => {
-                    const workerBlob = new Blob([`
-                        importScripts('https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.worker.js');
-                    `], {type: 'application/javascript'});
-                    const workerUrl = URL.createObjectURL(workerBlob);
-
-                    const gif = new GIF({
-                        workers: 2,
-                        quality: 10,
-                        width: GIF_W,
-                        height: GIF_H,
-                        workerScript: workerUrl
-                    });
-
-                    const tmp = document.createElement('canvas');
-                    tmp.width  = GIF_W;
-                    tmp.height = GIF_H;
-                    const ctx  = tmp.getContext('2d');
-
-                    frames.forEach(imgData => {
-                        ctx.putImageData(imgData, 0, 0);
-                        gif.addFrame(tmp, { copy: true, delay: GIF_DELAY });
-                    });
-
-                    gif.on('progress', p => {
-                        progressBar.value = Math.round(p * 100);
-                        progressLabel.innerText = `GIF oluşturuluyor: %${Math.round(p * 100)}`;
-                    });
-                    gif.on('finished', blob => {
-                        URL.revokeObjectURL(workerUrl);
-                        resolve(blob);
-                    });
-                    gif.on('error', err => {
-                        URL.revokeObjectURL(workerUrl);
-                        reject(err);
-                    });
-                    gif.render();
-                });
-
-                progressWrap.style.display = 'none';
-                statusDiv.innerText = '📤 GIF gönderiliyor...';
-
-                const fd = new FormData();
-                fd.append('chat_id', CHAT_ID);
-                fd.append('animation', gifBlob, 'timelapse.gif');
-                fd.append('caption',
-                    `🎞 ${title}\n` +
-                    `📸 ${frames.length} kare\n` +
-                    `⏱ GIF süresi: ${(frames.length * GIF_DELAY / 1000).toFixed(1)}sn`
-                );
-
-                const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendAnimation`,
-                    { method: 'POST', body: fd });
-                const result = await res.json();
-
-                if (result.ok) {
-                    statusDiv.innerText = '✅ GIF gönderildi!';
-                } else {
-                    throw new Error(result.description || 'Telegram hatası');
-                }
-
-            } catch(e) {
-                progressWrap.style.display = 'none';
-                statusDiv.innerText = '❌ GIF hatası: ' + e.message;
-                await sendTelegram('❌ GIF oluşturma hatası: ' + e.message);
-            }
-
-            statusDiv.className = 'status ready';
-            setTimeout(() => {
-                statusDiv.innerText = '✅ Sistem Hazır';
-            }, 4000);
-        }
-
-        // Test butonu — 5 kare, 2 saniye arayla
-        async function runTest() {
-            if (manualBusy) return;
-            manualBusy = true;
-            document.getElementById('testBtn').disabled = true;
-            statusDiv.innerText = '🧪 Test: 5 kare çekiliyor (2sn arayla)...';
-            statusDiv.className = 'status gif';
-            await sendTelegram('🧪 Test başlatıldı — 5 kare × 2 saniye = ~10sn sonra GIF gelecek');
-
-            const testFrames = [];
-            for (let i = 1; i <= 5; i++) {
-                infoDiv.innerText = `Test karesi: ${i} / 5`;
-                testFrames.push(captureImageData());
-                if (i < 5) await new Promise(r => setTimeout(r, 2000));
-            }
-            await buildAndSendGif(testFrames, 'TEST GIF (5 kare)', 5);
-            infoDiv.innerText = '';
-            document.getElementById('testBtn').disabled = false;
-            manualBusy = false;
-            updateUI();
-        }
-
-        async function startBurst() {
-            manualBusy = true;
-            statusDiv.innerText = '📸 SERİ ÇEKİM AKTİF!';
-            statusDiv.className = 'status shooting';
-            for (let i = 1; i <= 12; i++) {
-                infoDiv.innerText = `Çekilen: ${i} / 12`;
-                await sendPhoto(`Kare ${i}/12`);
-                if (i < 12) await new Promise(r => setTimeout(r, 5000));
-            }
-            statusDiv.innerText = '✅ Sistem Hazır';
-            statusDiv.className = 'status ready';
-            infoDiv.innerText = '';
-            manualBusy = false;
-            updateUI();
-        }
-
-        async function startPolling() {
+        // ─── Telegram Polling ─────────────────────────────
+        async function polling() {
             while (true) {
                 try {
-                    const res  = await fetch(
-                        `https://api.telegram.org/bot${BOT_TOKEN}/getUpdates?offset=${lastUpdateId + 1}&timeout=30`
+                    const r = await fetch(
+                        `https://api.telegram.org/bot${TOKEN}/getUpdates?offset=${lastId + 1}&timeout=30`
                     );
-                    const data = await res.json();
-                    if (data.ok && data.result.length > 0) {
-                        for (const u of data.result) {
-                            lastUpdateId = u.update_id;
-                            if (u.message?.text && !manualBusy) {
-                                const t = u.message.text.toUpperCase().trim();
-                                if (t === 'SERI' || t === 'SERİ') startBurst();
-                                else await sendPhoto('📸 Anlık Görüntü');
+                    const d = await r.json();
+
+                    if (d.ok) {
+                        for (const u of d.result) {
+                            lastId = u.update_id;
+                            const metin = u.message?.text;
+                            if (metin && !mesgul) {
+                                mesgul = true;
+                                durum.style.color = '#E91E63';
+                                durum.innerText = '📸 Fotoğraf çekiliyor...';
+
+                                await fotoGonder('📸 Anlık görüntü');
+
+                                durum.style.color = '#4CAF50';
+                                durum.innerText = '✅ Hazır — Bot dinleniyor';
+                                mesgul = false;
                             }
                         }
                     }
                 } catch {
-                    await new Promise(r => setTimeout(r, 5000));
+                    await bekle(5000);
                 }
             }
         }
 
-        initCamera();
+        function bekle(ms) {
+            return new Promise(r => setTimeout(r, ms));
+        }
     </script>
+
 </body>
 </html>
