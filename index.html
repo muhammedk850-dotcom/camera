@@ -34,7 +34,7 @@
 
         async function initCamera() {
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { exact: 'environment' } } });
                 video.srcObject = stream;
                 statusDiv.innerText = 'Sistem Hazır. Bot dinleniyor...';
                 statusDiv.className = 'status ready';
