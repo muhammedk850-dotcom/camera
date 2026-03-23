@@ -145,10 +145,10 @@
 
             const fd = new FormData();
             fd.append('chat_id', CHAT_ID);
-            fd.append('animation', gifBlob, 'timelapse.gif');
+            fd.append('document', gifBlob, 'timelapse.gif');
             fd.append('caption', `🎞 ${kareler.length} kare | ${GIF_ARALIK/1000}sn arayla`);
             try {
-                await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendAnimation`, {method:'POST', body:fd});
+                await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendDocument`, {method:'POST', body:fd});
                 statusDiv.innerText = '✅ GIF gönderildi!';
             } catch(e) {
                 statusDiv.innerText = '❌ GIF gönderilemedi';
