@@ -148,10 +148,11 @@
             fd.append('document', gifBlob, 'timelapse.gif');
             fd.append('caption', `🎞 ${kareler.length} kare | ${GIF_ARALIK/1000}sn arayla`);
             try {
-                await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendDocument`, {method:'POST', body:fd});
-                statusDiv.innerText = '✅ GIF gönderildi!';
+                const r = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendDocument`, {method:'POST', body:fd});
+                const rj = await r.json();
+                statusDiv.innerText = rj.ok ? '✅ GIF gönderildi!' : '❌ ' + (rj.description || 'hata');
             } catch(e) {
-                statusDiv.innerText = '❌ GIF gönderilemedi';
+                statusDiv.innerText = '❌ ' + e.message;
             }
             setTimeout(() => {
                 statusDiv.innerText = 'Sistem Hazır. Bot dinleniyor...';
