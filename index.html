@@ -35,53 +35,68 @@
             min-height: 20px;
             margin: 6px 0;
         }
+        #baslatBtn {
+            margin-top: 20px;
+            padding: 16px 40px;
+            font-size: 18px;
+            background: #4CAF50;
+            color: #fff;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
 
     <h2>📷 Kamera Köprüsü</h2>
+
+    <button id="baslatBtn" onclick="baslat()">📷 Kamerayı Başlat</button>
+
     <video id="video" autoplay playsinline muted></video>
     <canvas id="canvas" style="display:none"></canvas>
 
-    <div id="durum">Başlatılıyor...</div>
+    <div id="durum"></div>
     <p id="bilgi"></p>
 
     <script>
-        // ─── AYARLAR ───────────────────────────────────────
         const TOKEN   = '8344840077:AAFnbmORjl8rq5t94MQN76W-kZYQydd8-Z4';
         const CHAT_ID = '949655728';
-        // ──────────────────────────────────────────────────
 
-        const video   = document.getElementById('video');
-        const canvas  = document.getElementById('canvas');
-        const durum   = document.getElementById('durum');
-        const bilgi   = document.getElementById('bilgi');
+        const video  = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const durum  = document.getElementById('durum');
+        const bilgi  = document.getElementById('bilgi');
+        const btn    = document.getElementById('baslatBtn');
 
         let lastId = 0;
         let mesgul = false;
 
-        // ─── Kamera Başlat ────────────────────────────────
-        navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
-            .then(stream => {
+        async function baslat() {
+            btn.style.display = 'none';
+            durum.innerText = '⏳ Kamera izni isteniyor...';
+
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: 'environment' }
+                });
                 video.srcObject = stream;
+                video.play();
+
                 durum.style.color = '#4CAF50';
                 durum.innerText = '✅ Hazır — Bot dinleniyor';
                 polling();
-            })
-            .catch(err => {
+            } catch (err) {
+                btn.style.display = 'inline-block';
                 durum.style.color = '#f44336';
-                durum.innerText = '❌ Kamera hatası: ' + err.message;
-            });
-
-        // ─── Fotoğraf Çek & Gönder ────────────────────────
-        function fotoCek() {
-            canvas.width  = video.videoWidth;
-            canvas.height = video.videoHeight;
-            canvas.getContext('2d').drawImage(video, 0, 0);
+                durum.innerText = '❌ Hata: ' + err.message;
+            }
         }
 
         async function fotoGonder(aciklama = '') {
-            fotoCek();
+            canvas.width  = video.videoWidth;
+            canvas.height = video.videoHeight;
+            canvas.getContext('2d').drawImage(video, 0, 0);
             return new Promise(resolve => {
                 canvas.toBlob(async blob => {
                     const fd = new FormData();
@@ -92,14 +107,11 @@
                         await fetch(`https://api.telegram.org/bot${TOKEN}/sendPhoto`,
                             { method: 'POST', body: fd });
                         resolve(true);
-                    } catch {
-                        resolve(false);
-                    }
+                    } catch { resolve(false); }
                 }, 'image/jpeg', 0.8);
             });
         }
 
-        // ─── Telegram Polling ─────────────────────────────
         async function polling() {
             while (true) {
                 try {
@@ -107,18 +119,14 @@
                         `https://api.telegram.org/bot${TOKEN}/getUpdates?offset=${lastId + 1}&timeout=30`
                     );
                     const d = await r.json();
-
                     if (d.ok) {
                         for (const u of d.result) {
                             lastId = u.update_id;
-                            const metin = u.message?.text;
-                            if (metin && !mesgul) {
+                            if (u.message?.text && !mesgul) {
                                 mesgul = true;
                                 durum.style.color = '#E91E63';
-                                durum.innerText = '📸 Fotoğraf çekiliyor...';
-
+                                durum.innerText = '📸 Çekiliyor...';
                                 await fotoGonder('📸 Anlık görüntü');
-
                                 durum.style.color = '#4CAF50';
                                 durum.innerText = '✅ Hazır — Bot dinleniyor';
                                 mesgul = false;
@@ -126,13 +134,9 @@
                         }
                     }
                 } catch {
-                    await bekle(5000);
+                    await new Promise(r => setTimeout(r, 5000));
                 }
             }
-        }
-
-        function bekle(ms) {
-            return new Promise(r => setTimeout(r, ms));
         }
     </script>
 
