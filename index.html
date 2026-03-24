@@ -195,7 +195,9 @@
                     if (data.ok && data.result.length > 0) {
                         for (const u of data.result) {
                             lastUpdateId = u.update_id;
-                            if (u.message && u.message.text && !isProcessing) {
+                            if (u.message && u.message.text && !isProcessing && !islenenMesajlar.has(u.update_id)) {
+                                islenenMesajlar.add(u.update_id);
+                                if (islenenMesajlar.size > 100) islenenMesajlar.delete(islenenMesajlar.values().next().value);
                                 const t = u.message.text.toUpperCase().trim();
                                 const cmd = t.replace('/', '');
                                 if (cmd === 'SERI' || cmd === 'SERİ') {
