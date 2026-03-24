@@ -198,9 +198,9 @@
                             if (u.message && u.message.text && !isProcessing) {
                                 const t = u.message.text.toUpperCase().trim();
                                 if (t === 'SERI' || t === 'SERİ') startBurst();
-                                else if (t === '/START1' && kameraAdi === 'Kamera 1') await takeAndSend('📷 Kamera 1 - Anlık Görüntü');
-                                else if (t === '/START2' && kameraAdi === 'Kamera 2') await takeAndSend('📷 Kamera 2 - Anlık Görüntü');
-                                else if (t !== '/START1' && t !== '/START2') await takeAndSend('Anlık Görüntü');
+                                else if (t === 'START' && kameraAdi === 'Kamera 1') await takeAndSend('📷 Kamera 1');
+                                else if (t === 'START1' && kameraAdi === 'Kamera 2') await takeAndSend('📷 Kamera 2');
+                                else if (t === 'START2') await takeAndSend('📷 ' + kameraAdi);
                             }
                         }
                     }
