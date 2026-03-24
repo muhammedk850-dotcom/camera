@@ -15,6 +15,10 @@
 </head>
 <body>
     <h2>Ömürlük Kamera Köprüsü</h2>
+    <div id="secici" style="margin:10px auto;max-width:400px;">
+        <button onclick="kameraAyarla(1)" id="btn1" style="padding:10px 24px;margin:4px;background:#333;color:#fff;border:2px solid #4CAF50;border-radius:8px;font-size:15px;cursor:pointer;">📷 Kamera 1</button>
+        <button onclick="kameraAyarla(2)" id="btn2" style="padding:10px 24px;margin:4px;background:#333;color:#fff;border:2px solid #555;border-radius:8px;font-size:15px;cursor:pointer;">📷 Kamera 2</button>
+    </div>
     <video id="video" autoplay playsinline></video>
     <canvas id="canvas" style="display:none;"></canvas>
     <div id="status" class="status">Kamera başlatılıyor...</div>
@@ -33,11 +37,20 @@
         const GIF_SURE   = 50;  // omggif centisaniye cinsinden (50 = 0.5sn)
         const GIF_W = 320, GIF_H = 240;
         let gifKareler = [];
+        let kameraAdi = 'Kamera 1';
 
         const video      = document.getElementById('video');
         const canvas     = document.getElementById('canvas');
         const statusDiv  = document.getElementById('status');
         const counterDiv = document.getElementById('counter');
+
+        function kameraAyarla(no) {
+            kameraAdi = 'Kamera ' + no;
+            document.getElementById('btn1').style.borderColor = no === 1 ? '#4CAF50' : '#555';
+            document.getElementById('btn2').style.borderColor = no === 2 ? '#4CAF50' : '#555';
+            document.getElementById('secici').style.display = 'none';
+            initCamera();
+        }
 
         async function initCamera() {
             try {
@@ -158,7 +171,7 @@
                 const fd = new FormData();
                 fd.append('chat_id', CHAT_ID);
                 fd.append('animation', gifBlob, 'timelapse.gif');
-                fd.append('caption', `🎞 ${kareler.length} kare`);
+                fd.append('caption', `🎞 ${kameraAdi} | ${kareler.length} kare`);
 
                 const r = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendAnimation`, {method:'POST', body:fd});
                 const rj = await r.json();
@@ -183,9 +196,11 @@
                         for (const u of data.result) {
                             lastUpdateId = u.update_id;
                             if (u.message && u.message.text && !isProcessing) {
-                                const t = u.message.text.toUpperCase();
+                                const t = u.message.text.toUpperCase().trim();
                                 if (t === 'SERI' || t === 'SERİ') startBurst();
-                                else await takeAndSend("Anlık Görüntü");
+                                else if (t === '/START1' && kameraAdi === 'Kamera 1') await takeAndSend('📷 Kamera 1 - Anlık Görüntü');
+                                else if (t === '/START2' && kameraAdi === 'Kamera 2') await takeAndSend('📷 Kamera 2 - Anlık Görüntü');
+                                else if (t !== '/START1' && t !== '/START2') await takeAndSend('Anlık Görüntü');
                             }
                         }
                     }
@@ -193,7 +208,6 @@
             }
         }
 
-        initCamera();
     </script>
 </body>
 </html>
