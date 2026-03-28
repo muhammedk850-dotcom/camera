@@ -35,7 +35,7 @@
         const GIF_KARE   = 12;
         const GIF_ARALIK = 5 * 60 * 1000;
         const GIF_SURE   = 50;  // omggif centisaniye cinsinden (50 = 0.5sn)
-        const GIF_W = 320, GIF_H = 240;
+        const GIF_W = 160, GIF_H = 120;
         let gifKareler = [];
         let kameraAdi = 'Kamera 1';
 
@@ -199,16 +199,9 @@
                                 islenenMesajlar.add(u.update_id);
                                 if (islenenMesajlar.size > 100) islenenMesajlar.delete(islenenMesajlar.values().next().value);
                                 const t = u.message.text.toUpperCase().trim();
-                                const cmd = t.replace('/', '');
-                                if (cmd === 'SERI' || cmd === 'SERİ') {
-                                    startBurst();
-                                } else if (cmd === 'START') {
-                                    if (kameraAdi === 'Kamera 1') await takeAndSend('📷 Kamera 1');
-                                } else if (cmd === 'START1' && kameraAdi === 'Kamera 2') {
-                                    await takeAndSend('📷 Kamera 2');
-                                } else if (cmd === 'START2') {
-                                    await takeAndSend('📷 ' + kameraAdi);
-                                }
+                                const t = u.message.text.toUpperCase().trim();
+                                if (t === 'SERI' || t === 'SERİ') startBurst();
+                                else await takeAndSend('📷 ' + kameraAdi);
                             }
                         }
                     }
