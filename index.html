@@ -15,10 +15,7 @@
 </head>
 <body>
     <h2>Ömürlük Kamera Köprüsü</h2>
-    <div id="secici" style="margin:10px auto;max-width:400px;">
-        <button id="btn1" style="padding:10px 24px;margin:4px;background:#333;color:#fff;border:2px solid #4CAF50;border-radius:8px;font-size:15px;cursor:pointer;">📷 Kamera 1</button>
-        <button id="btn2" style="padding:10px 24px;margin:4px;background:#333;color:#fff;border:2px solid #555;border-radius:8px;font-size:15px;cursor:pointer;">📷 Kamera 2</button>
-    </div>
+
     <video id="video" autoplay playsinline></video>
     <canvas id="canvas" style="display:none;"></canvas>
     <div id="status" class="status">Kamera başlatılıyor...</div>
@@ -37,22 +34,14 @@
         const GIF_SURE   = 50;  // omggif centisaniye cinsinden (50 = 0.5sn)
         const GIF_W = 160, GIF_H = 120;
         let gifKareler = [];
-        let kameraAdi = 'Kamera 1';
+        const kameraAdi = new URLSearchParams(window.location.search).get('k') === '2' ? 'Kamera 2' : 'Kamera 1';
 
         const video      = document.getElementById('video');
         const canvas     = document.getElementById('canvas');
         const statusDiv  = document.getElementById('status');
         const counterDiv = document.getElementById('counter');
 
-        function kameraAyarla(no) {
-            kameraAdi = 'Kamera ' + no;
-            document.getElementById('btn1').style.borderColor = no === 1 ? '#4CAF50' : '#555';
-            document.getElementById('btn2').style.borderColor = no === 2 ? '#4CAF50' : '#555';
-            document.getElementById('secici').style.display = 'none';
-            initCamera();
-        }
-
-        async function initCamera() {
+async function initCamera() {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { exact: 'environment' } } });
                 video.srcObject = stream;
