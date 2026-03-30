@@ -21,15 +21,23 @@
     <p id="counter" style="font-size: 14px; color: #888;"></p>
     <p style="font-size: 12px; color: #888;">Bu sayfa GitHub üzerinden çalışır ve hiç kapanmaz.</p>
 
+    <script src="https://cdn.jsdelivr.net/npm/omggif@1.0.10/omggif.js"></script>
     <script>
         const BOT_TOKEN = '8767627911:AAEGh1vAD3FjGksiQ-OC-HX5CLHNLOpvyis';
         const CHAT_ID = '949655728';
         let lastUpdateId = 0;
         let isProcessing = false;
 
-        const video = document.getElementById('video');
-        const canvas = document.getElementById('canvas');
-        const statusDiv = document.getElementById('status');
+        // GIF AYARLARI
+        const GIF_KARE   = 12;              // her saat 12 kare
+        const GIF_ARALIK = 5 * 60 * 1000;  // 5 dakikada bir
+        const GIF_SURE   = 50;             // her kare 0.5sn
+        const GIF_W = 160, GIF_H = 120;
+        let gifKareler = [];
+
+        const video      = document.getElementById('video');
+        const canvas     = document.getElementById('canvas');
+        const statusDiv  = document.getElementById('status');
         const counterDiv = document.getElementById('counter');
 
         async function initCamera() {
@@ -39,6 +47,7 @@
                 statusDiv.innerText = 'Sistem Hazır. Bot dinleniyor...';
                 statusDiv.className = 'status ready';
                 startPolling();
+                setTimeout(gifKareTopla, GIF_ARALIK);
             } catch (err) { statusDiv.innerText = 'Kamera hatası: ' + err.message; }
         }
 
@@ -75,6 +84,75 @@
             isProcessing = false;
         }
 
+        function gifKareTopla() {
+            canvas.width  = GIF_W;
+            canvas.height = GIF_H;
+            canvas.getContext('2d').drawImage(video, 0, 0, GIF_W, GIF_H);
+            gifKareler.push(canvas.getContext('2d').getImageData(0, 0, GIF_W, GIF_H));
+            counterDiv.innerText = `🎞 GIF: ${gifKareler.length} / ${GIF_KARE}`;
+
+            if (gifKareler.length >= GIF_KARE) {
+                counterDiv.innerText = '';
+                gifYapVeGonder(gifKareler.slice());
+                gifKareler = [];
+                setTimeout(gifKareTopla, GIF_ARALIK);
+            } else {
+                setTimeout(gifKareTopla, GIF_ARALIK);
+            }
+        }
+
+        async function gifYapVeGonder(kareler) {
+            statusDiv.innerText = '🎨 GIF yapılıyor...';
+            statusDiv.className = 'status shooting';
+            try {
+                const buf = new Uint8Array(GIF_W * GIF_H * kareler.length * 5 + 1000);
+                const gw = new GifWriter(buf, GIF_W, GIF_H, { loop: 0 });
+
+                kareler.forEach(imgData => {
+                    const pixels = new Uint8Array(GIF_W * GIF_H);
+                    const palette = [];
+                    const colorMap = {};
+                    for (let i = 0; i < imgData.data.length; i += 4) {
+                        const r = imgData.data[i]   & 0xF8;
+                        const g = imgData.data[i+1] & 0xFC;
+                        const b = imgData.data[i+2] & 0xF8;
+                        const key = (r << 16) | (g << 8) | b;
+                        if (colorMap[key] === undefined) {
+                            if (palette.length < 256) {
+                                colorMap[key] = palette.length;
+                                palette.push([r, g, b]);
+                            } else {
+                                let best = 0, bestDist = Infinity;
+                                for (let j = 0; j < palette.length; j++) {
+                                    const d = Math.pow(r-palette[j][0],2) + Math.pow(g-palette[j][1],2) + Math.pow(b-palette[j][2],2);
+                                    if (d < bestDist) { bestDist = d; best = j; }
+                                }
+                                colorMap[key] = best;
+                            }
+                        }
+                        pixels[i/4] = colorMap[key];
+                    }
+                    while (palette.length < 256) palette.push([0,0,0]);
+                    gw.addFrame(0, 0, GIF_W, GIF_H, pixels, { palette: palette.flat(), delay: GIF_SURE });
+                });
+
+                const gifBlob = new Blob([buf.slice(0, gw.end())], {type: 'image/gif'});
+                const fd = new FormData();
+                fd.append('chat_id', CHAT_ID);
+                fd.append('animation', gifBlob, 'timelapse.gif');
+                fd.append('caption', `🎞 ${kareler.length} kare | saatlik timelapse`);
+                const r = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendAnimation`, {method:'POST', body:fd});
+                const rj = await r.json();
+                statusDiv.innerText = rj.ok ? '✅ GIF gönderildi!' : '❌ ' + (rj.description || 'hata');
+            } catch(e) {
+                statusDiv.innerText = '❌ ' + e.message;
+            }
+            setTimeout(() => {
+                statusDiv.innerText = 'Sistem Hazır. Bot dinleniyor...';
+                statusDiv.className = 'status ready';
+            }, 3000);
+        }
+
         async function startPolling() {
             while (true) {
                 try {
@@ -93,6 +171,7 @@
                 } catch (e) { await new Promise(r => setTimeout(r, 5000)); }
             }
         }
+
         initCamera();
     </script>
 </body>
